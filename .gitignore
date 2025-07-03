@@ -1,0 +1,7 @@
+build/
+sdkconfig
+sdkconfig.old
+.venv
+.devcontainer
+_pychace_
+.pytest_cache
