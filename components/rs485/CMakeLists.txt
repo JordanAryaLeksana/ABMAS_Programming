@@ -1,3 +1,3 @@
-idf_component_register(SCRS "rs485.c"
+idf_component_register(SRCS "rs485.c"
                         PRIV_REQUIRES spi_flash esp_driver_uart
-                        INCLUDE_DIRS ".")
+                        INCLUDE_DIRS "include")
