@@ -3,18 +3,18 @@
 #include "freertos/task.h"
 #include "driver/i2c.h"
 #include "esp_log.h"
-
+#include "driver/uart.h"
 #include "bmx280.h"
 #include "ds3231.h"
 #include "gy2561.h"
-
+#include "rs485.h"
 #include "lora.h"
 
 #define I2C_MASTER_SDA_IO 21
 #define I2C_MASTER_SCL_IO 22
 #define I2C_MASTER_NUM I2C_NUM_0
 #define I2C_MASTER_FREQ_HZ 100000
-
+#define BAUD_RATE_UART 9600
 static const char *TAG = "MAIN";
 
 // Instances
@@ -22,7 +22,8 @@ bmx280_t *bmx;
 ds3231_t rtc;
 gy2561_t lux_sensor;
 
-void i2c_master_init() {
+void i2c_master_init()
+{
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,
         .sda_io_num = I2C_MASTER_SDA_IO,
@@ -35,16 +36,21 @@ void i2c_master_init() {
     i2c_driver_install(I2C_MASTER_NUM, conf.mode, 0, 0, 0);
 }
 
-void app_main() {
+void app_main()
+{
     // Inisialisasi I2C
     i2c_master_init();
     ESP_LOGI(TAG, "I2C Initialized");
+    soil_initialize();
 
     // Inisialisasi BME280 / BMP280
     bmx = bmx280_create_legacy(I2C_MASTER_NUM);
-    if (bmx280_init(bmx) == ESP_OK) {
+    if (bmx280_init(bmx) == ESP_OK)
+    {
         ESP_LOGI(TAG, "BMX280 connected");
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Failed to init BMX280");
     }
 
@@ -55,30 +61,48 @@ void app_main() {
     gy2561_init(&lux_sensor, I2C_MASTER_NUM, 0x23);
 
     // Inisialisasi LoRa
-    if (lora_init()) {
+    if (lora_init())
+    {
         lora_set_frequency(915e6); // atau 868e6 tergantung modul
         lora_enable_crc();
         ESP_LOGI(TAG, "LoRa Initialized");
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "LoRa Init Failed");
     }
 
-    while (1) {
+    while (1)
+    {
+        soil_parameters_t soil_data;
+        bulk_read_soil_parameters(&soil_data);
+        ESP_LOGI(TAG, "Soil Moisture: %d, Temp: %d, Hum: %d, EC: %d, N: %d, P: %d, K: %d",
+                 soil_data.soil_moist_value,
+                 soil_data.soil_temp_value,
+                 soil_data.soil_humidity_value,
+                 soil_data.soil_cond_value,
+                 soil_data.soil_nitrogen_value,
+                 soil_data.soil_phosporus_value,
+                 soil_data.soil_potassium_value);
+
         // Baca suhu, tekanan, kelembapan
         float temp, pres, hum;
-        if (bmx280_readoutFloat(bmx, &temp, &pres, &hum) == ESP_OK) {
+        if (bmx280_readoutFloat(bmx, &temp, &pres, &hum) == ESP_OK)
+        {
             ESP_LOGI(TAG, "Temp: %.2f C, Pressure: %.2f Pa, Hum: %.2f %%", temp, pres, hum);
         }
 
         // Baca lux dari BH1750
         float lux;
-        if (gy2561_readlux(&lux_sensor, &lux)) {
+        if (gy2561_readlux(&lux_sensor, &lux))
+        {
             ESP_LOGI(TAG, "Lux: %.2f lx", lux);
         }
 
         // Baca waktu dari DS3231
         struct tm timeinfo;
-        if (ds3231_get_time(&rtc, &timeinfo)) {
+        if (ds3231_get_time(&rtc, &timeinfo))
+        {
             ESP_LOGI(TAG, "Time: %02d:%02d:%02d", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
         }
 

@@ -3,7 +3,7 @@
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h" // Ensure pdMS_TO_TICKS is defined
+#include "freertos/task.h" 
 
 #ifndef CONFIG_LOG_MAXIMUM_LEVEL
 #define CONFIG_LOG_MAXIMUM_LEVEL 3
@@ -43,6 +43,7 @@ void soil_initialize() {
     };
     ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, CONFIG_SENSOR_TX_PIN, CONFIG_SENSOR_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, 256, 0, 0, NULL, 0));
 }
 
 void bulk_read_soil_parameters(soil_parameters_t *soil_params) {
