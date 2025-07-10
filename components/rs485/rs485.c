@@ -3,25 +3,30 @@
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h" 
-
+#include "freertos/task.h"
+#include "driver/gpio.h"
 #ifndef CONFIG_LOG_MAXIMUM_LEVEL
 #define CONFIG_LOG_MAXIMUM_LEVEL 3
 #endif
 
-
 #define CONFIG_SENSOR_TX_PIN 17
 #define CONFIG_SENSOR_RX_PIN 16
-
+#define DE_RE_PIN 4
 #define CONFIG_FREE_RTOS_HZ 1000
-uint16_t crc16(uint8_t *data, int length) {
+uint16_t crc16(uint8_t *data, int length)
+{
     uint16_t crc = 0xFFFF;
-    for (int i = 0; i < length; i++) {
+    for (int i = 0; i < length; i++)
+    {
         crc ^= data[i];
-        for (int j = 0; j < 8; j++) {
-            if (crc & 0x0001) {
+        for (int j = 0; j < 8; j++)
+        {
+            if (crc & 0x0001)
+            {
                 crc = (crc >> 1) ^ 0xA001;
-            } else {
+            }
+            else
+            {
                 crc >>= 1;
             }
         }
@@ -29,9 +34,10 @@ uint16_t crc16(uint8_t *data, int length) {
     return crc;
 }
 
-void soil_initialize() {
+void soil_initialize()
+{
     ESP_LOGI("rs485", "Initializing soil sensor");
-    
+
     // Set up UART for communication
     uart_config_t uart_config = {
         .baud_rate = 9600,
@@ -46,29 +52,63 @@ void soil_initialize() {
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, 256, 0, 0, NULL, 0));
 }
 
-void bulk_read_soil_parameters(soil_parameters_t *soil_params) {
-    inquirity_frame_t frame;
-    frame.address = 0x01;
-    frame.func = 0x03;
-    frame.start = SOIL_MOIST_VALUE_REG;
-    frame.length = 0x0007; // baca 7 parameters
-    frame.CRC = crc16((uint8_t *)&frame, sizeof(frame) - sizeof(frame.CRC));
-    uart_write_bytes(UART_NUM_2, (const char *)&frame, sizeof(frame));
+void read_all_soil_parameters(soil_parameters_t *params) {
+    // ---------- pH + EC + Temp + Humid ----------
+    uint8_t ecph_cmd[8] = {0x01, 0x03, 0x00, 0x00, 0x00, 0x04, 0x44, 0x09};
+    uint8_t ecph_resp[13] = {0};
 
-    uint8_t response[21]; // metadata + 7 parameters * 2 byte
-    int length = uart_read_bytes(UART_NUM_2, response, sizeof(response),
-								 pdMS_TO_TICKS(1000)); // Wait for 1 second	
-    
-    if (length < 21) {
-        ESP_LOGW("Soil7in1", "Failed to read all parameters");
-        return;
+    gpio_set_level(DE_RE_PIN, 1); // TX
+    uart_write_bytes(UART_NUM_2, (const char *)ecph_cmd, sizeof(ecph_cmd));
+    uart_wait_tx_done(UART_NUM_2, pdMS_TO_TICKS(100));
+    gpio_set_level(DE_RE_PIN, 0); // RX
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    int len = uart_read_bytes(UART_NUM_2, ecph_resp, sizeof(ecph_resp), pdMS_TO_TICKS(1000));
+    if (len == 13 && ecph_resp[0] == 0x01 && ecph_resp[1] == 0x03) {
+        params->humidity     = (ecph_resp[3] << 8) | ecph_resp[4];
+        params->temperature  = (ecph_resp[5] << 8) | ecph_resp[6];
+        params->ec           = (ecph_resp[7] << 8) | ecph_resp[8];
+        params->ph           = ((ecph_resp[9] << 8) | ecph_resp[10]) / 10.0;
+    } else {
+        ESP_LOGW("SOIL", "Failed to read EC+PH response");
     }
 
-    soil_params->soil_moist_value = (response[3] << 8) | response[4];
-    soil_params->soil_temp_value = (response[5] << 8) | response[6];
-    soil_params->soil_humidity_value = (response[7] << 8) | response[8];
-    soil_params->soil_cond_value = (response[9] << 8) | response[10];
-    soil_params->soil_nitrogen_value = (response[11] << 8) | response[12];
-    soil_params->soil_phosporus_value = (response[13] << 8) | response[14];
-    soil_params->soil_potassium_value = (response[15] << 8) | response[16];
+    // ---------- NPK Individu ----------
+    struct {
+        const char *label;
+        uint16_t reg;
+        int *target;
+    } npk_regs[] = {
+        {"N", 0x001E, &params->nitrogen},
+        {"P", 0x001F, &params->phosphor},
+        {"K", 0x0020, &params->kalium},
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        uint8_t req[8];
+        req[0] = 0x01;
+        req[1] = 0x03;
+        req[2] = (npk_regs[i].reg >> 8) & 0xFF;
+        req[3] = npk_regs[i].reg & 0xFF;
+        req[4] = 0x00;
+        req[5] = 0x01;
+        uint16_t crc = crc16(req, 6);
+        req[6] = crc & 0xFF;
+        req[7] = (crc >> 8) & 0xFF;
+
+        gpio_set_level(DE_RE_PIN, 1);
+        uart_write_bytes(UART_NUM_2, (const char *)req, 8);
+        uart_wait_tx_done(UART_NUM_2, pdMS_TO_TICKS(100));
+        gpio_set_level(DE_RE_PIN, 0);
+        vTaskDelay(pdMS_TO_TICKS(50));
+
+        uint8_t resp[7] = {0};
+        int len = uart_read_bytes(UART_NUM_2, resp, sizeof(resp), pdMS_TO_TICKS(1000));
+        if (len == 7 && resp[0] == 0x01 && resp[1] == 0x03 && resp[2] == 0x02) {
+            *(npk_regs[i].target) = (resp[3] << 8) | resp[4];
+        } else {
+            ESP_LOGW("SOIL", "Failed to read %s value", npk_regs[i].label);
+        }
+    }
 }
+

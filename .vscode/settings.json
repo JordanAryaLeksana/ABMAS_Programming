@@ -20,5 +20,6 @@
     "esp_log.h": "c",
     "task.h": "c"
   },
-  "C_Cpp.errorSquiggles": "enabled"
+  "C_Cpp.errorSquiggles": "enabled",
+  "idf.portWin": "COM4"
 }

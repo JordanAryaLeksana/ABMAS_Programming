@@ -27,18 +27,19 @@ typedef struct {
 #define EQUIP_ADDR_REG 0x100
 #define BAU_RATE_REG 0x101
 
-typedef struct {    
-    uint16_t soil_moist_value;
-    uint16_t soil_temp_value;
-    uint16_t soil_humidity_value;
-    uint16_t soil_cond_value;
-    uint16_t soil_nitrogen_value;
-    uint16_t soil_phosporus_value;
-    uint16_t soil_potassium_value;
+typedef struct {
+    float ec;
+    float ph;
+    float temperature;
+    float humidity;
+    float nitrogen;
+    float phosphor;
+    float kalium;
 } soil_parameters_t;
 
 
+
 void soil_initialize();
-void bulk_read_soil_parameters(soil_parameters_t *soil_params);
+void read_all_soil_parameters(soil_parameters_t *soil_params);
 
 #endif
