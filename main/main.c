@@ -8,14 +8,11 @@ static const char *TAG = "APP_MAIN";
 
 void app_main(void)
 {
-    // Sensor 1: EC + pH + Temp + Humid
     soil_sensor_t ecph_sensor = {
         .uart_num = UART_NUM_1,
         .tx_pin = 17,
         .rx_pin = 16,
         .de_re_pin = 4};
-
-    // Sensor 2: NPK
     soil_sensor_t npk_sensor = {
         .uart_num = UART_NUM_2,
         .tx_pin = 14,
