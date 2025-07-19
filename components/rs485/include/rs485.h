@@ -2,44 +2,42 @@
 #define __SOIL7IN1_H__
 
 #include <stdint.h>
+#include "driver/uart.h"
 
-typedef struct {
-  uint8_t address;
-  uint8_t func;
-  uint16_t start;
-  uint16_t length;
-  uint16_t CRC;
-} inquirity_frame_t;
+typedef struct
+{
+    uart_port_t uart_num;
+    int tx_pin;
+    int rx_pin;
+    int de_re_pin;
+} soil_sensor_t;
 
-typedef struct {
-  uint8_t address;
-  uint8_t func;
-  uint8_t effective_number;  
-} response_frame_meadata_t;
-
-#define PH_VALUE_REG 0x6
-#define SOIL_MOIST_VALUE_REG 0x12
-#define SOIL_TEMP_REG 0x13
-#define SOIL_COND_REG 0x15
-#define SOIL_NITROGEN_REG 0x1E
-#define SOIL_PHOSPORUS_REG 0x1F
-#define SOIL_POTASIUM_REG 0x20
-#define EQUIP_ADDR_REG 0x100
-#define BAU_RATE_REG 0x101
-
-typedef struct {
+typedef struct
+{
     float ec;
     float ph;
-    float temperature;
-    float humidity;
+    float salinity;
+    float tds;
     float nitrogen;
     float phosphor;
     float kalium;
 } soil_parameters_t;
 
+#define EC_REG             0x0002  // 40003
+#define PH_REG             0x0003  // 40004
+#define SALINITY_REG       0x0007  // 40005           
+#define TDS_REG            0x0008  // 40006
+#define NITROGEN_REG       0x001E  // 40031 
+#define PHOSPHORUS_REG     0x001F // 40032
+#define POTASSIUM_REG      0x0020  // 40033
 
+// Device config
+#define EQUIP_ADDR_REG     0x07D0
+#define BAU_RATE_REG       0x07D1
 
-void soil_initialize();
-void read_all_soil_parameters(soil_parameters_t *soil_params);
+// API
+void init_soil_sensor(const soil_sensor_t *sensor);
+void read_ecph_parameters(const soil_sensor_t *sensor, soil_parameters_t *soil_params);
+void read_npk_parameters(const soil_sensor_t *sensor, soil_parameters_t *soil_params);
 
 #endif
