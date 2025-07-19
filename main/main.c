@@ -29,9 +29,7 @@ void app_main(void)
     init_soil_sensor(&npk_sensor);
     while (1)
     {
-        // Baca ECPH dari sensor 1
         read_ecph_parameters(&ecph_sensor, &ecph_data);
-        // Baca NPK dari sensor 2
         read_npk_parameters(&npk_sensor, &npk_data);
 
         ESP_LOGI(TAG, "=== Sensor EC+PH ===");
